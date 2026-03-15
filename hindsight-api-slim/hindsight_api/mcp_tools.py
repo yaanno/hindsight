@@ -457,6 +457,7 @@ def _register_recall(mcp: FastMCP, memory: MemoryEngine, config: MCPToolsConfig)
             tags_match: str = "any",
             query_timestamp: str | None = None,
             bank_id: str | None = None,
+            include_sources: bool = False,
         ) -> str | dict:
             """
             Args:
@@ -468,6 +469,7 @@ def _register_recall(mcp: FastMCP, memory: MemoryEngine, config: MCPToolsConfig)
                 tags_match: How to match tags - 'any' (match any tag) or 'all' (match all tags). Default: 'any'
                 query_timestamp: Temporal context for the query (ISO format, e.g., '2024-01-15T10:30:00Z'). Helps retrieve time-relevant memories.
                 bank_id: Optional bank to search in (defaults to session bank). Use for cross-bank operations.
+                include_sources: Include full fact details, chunks, entities, and source facts (default: False). When False, returns only id, text, fact_type, and tags per result.
             """
             try:
                 target_bank = bank_id or config.bank_id_resolver()
@@ -494,6 +496,14 @@ def _register_recall(mcp: FastMCP, memory: MemoryEngine, config: MCPToolsConfig)
 
                 recall_result = await memory.recall_async(**recall_kwargs)
 
+                if not include_sources:
+                    compact = {
+                        "results": [
+                            {k: r[k] for k in ("id", "text", "fact_type", "tags") if k in r}
+                            for r in (recall_result.model_dump()["results"])
+                        ]
+                    }
+                    return json.dumps(compact, indent=2)
                 return recall_result.model_dump_json(indent=2)
             except OperationValidationError as e:
                 logger.warning(f"Recall rejected: {e}")
@@ -515,6 +525,7 @@ def _register_recall(mcp: FastMCP, memory: MemoryEngine, config: MCPToolsConfig)
             tags: list[str] | None = None,
             tags_match: str = "any",
             query_timestamp: str | None = None,
+            include_sources: bool = False,
         ) -> dict:
             """
             Args:
@@ -525,6 +536,7 @@ def _register_recall(mcp: FastMCP, memory: MemoryEngine, config: MCPToolsConfig)
                 tags: Optional tags to filter results by (e.g., ['project:alpha'])
                 tags_match: How to match tags - 'any' (match any tag) or 'all' (match all tags). Default: 'any'
                 query_timestamp: Temporal context for the query (ISO format, e.g., '2024-01-15T10:30:00Z'). Helps retrieve time-relevant memories.
+                include_sources: Include full fact details, chunks, entities, and source facts (default: False). When False, returns only id, text, fact_type, and tags per result.
             """
             try:
                 target_bank = config.bank_id_resolver()
@@ -551,6 +563,13 @@ def _register_recall(mcp: FastMCP, memory: MemoryEngine, config: MCPToolsConfig)
 
                 recall_result = await memory.recall_async(**recall_kwargs)
 
+                if not include_sources:
+                    return {
+                        "results": [
+                            {k: r[k] for k in ("id", "text", "fact_type", "tags") if k in r}
+                            for r in (recall_result.model_dump()["results"])
+                        ]
+                    }
                 return recall_result.model_dump()
             except OperationValidationError as e:
                 logger.warning(f"Recall rejected: {e}")
@@ -577,6 +596,7 @@ def _register_reflect(mcp: FastMCP, memory: MemoryEngine, config: MCPToolsConfig
             tags: list[str] | None = None,
             tags_match: str = "any",
             bank_id: str | None = None,
+            include_sources: bool = False,
         ) -> str:
             """
             Generate thoughtful analysis by synthesizing stored memories with the bank's personality.
@@ -606,6 +626,7 @@ def _register_reflect(mcp: FastMCP, memory: MemoryEngine, config: MCPToolsConfig
                 tags: Optional tags to filter memories by (e.g., ['project:alpha'])
                 tags_match: How to match tags - 'any' (match any tag) or 'all' (match all tags). Default: 'any'
                 bank_id: Optional bank to reflect in (defaults to session bank). Use for cross-bank operations.
+                include_sources: Include based_on evidence and traces in response (default: False). Set to True for debugging provenance.
             """
             try:
                 target_bank = bank_id or config.bank_id_resolver()
@@ -634,6 +655,10 @@ def _register_reflect(mcp: FastMCP, memory: MemoryEngine, config: MCPToolsConfig
                 result_data = json.loads(reflect_result.model_dump_json(indent=2))
                 if response_schema is not None and hasattr(reflect_result, "structured_output"):
                     result_data["structured_output"] = reflect_result.structured_output
+                if not include_sources:
+                    result_data.pop("based_on", None)
+                    result_data.pop("tool_trace", None)
+                    result_data.pop("llm_trace", None)
                 return json.dumps(result_data, indent=2)
             except OperationValidationError as e:
                 logger.warning(f"Reflect rejected: {e}")
@@ -653,6 +678,7 @@ def _register_reflect(mcp: FastMCP, memory: MemoryEngine, config: MCPToolsConfig
             response_schema: dict | None = None,
             tags: list[str] | None = None,
             tags_match: str = "any",
+            include_sources: bool = False,
         ) -> dict:
             """
             Generate thoughtful analysis by synthesizing stored memories with the bank's personality.
@@ -681,6 +707,7 @@ def _register_reflect(mcp: FastMCP, memory: MemoryEngine, config: MCPToolsConfig
                 response_schema: Optional JSON schema for structured output. When provided, the response includes a 'structured_output' field.
                 tags: Optional tags to filter memories by (e.g., ['project:alpha'])
                 tags_match: How to match tags - 'any' (match any tag) or 'all' (match all tags). Default: 'any'
+                include_sources: Include based_on evidence and traces in response (default: False). Set to True for debugging provenance.
             """
             try:
                 target_bank = config.bank_id_resolver()
@@ -709,6 +736,10 @@ def _register_reflect(mcp: FastMCP, memory: MemoryEngine, config: MCPToolsConfig
                 result_data = reflect_result.model_dump()
                 if response_schema is not None and hasattr(reflect_result, "structured_output"):
                     result_data["structured_output"] = reflect_result.structured_output
+                if not include_sources:
+                    result_data.pop("based_on", None)
+                    result_data.pop("tool_trace", None)
+                    result_data.pop("llm_trace", None)
                 return result_data
             except OperationValidationError as e:
                 logger.warning(f"Reflect rejected: {e}")
