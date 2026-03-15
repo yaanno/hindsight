@@ -37,37 +37,66 @@ class AnthropicLLM(LLMInterface):
         model: str,
         reasoning_effort: str = "low",
         timeout: float = 300.0,
+        bedrock_aws_region: str | None = None,
+        bedrock_aws_profile: str | None = None,
         **kwargs: Any,
     ):
         """
         Initialize Anthropic LLM provider.
 
         Args:
-            provider: Provider name (should be "anthropic").
-            api_key: Anthropic API key.
+            provider: Provider name ("anthropic" for direct API, "bedrock" for AWS Bedrock).
+            api_key: Anthropic API key (required for "anthropic", ignored for "bedrock").
             base_url: Base URL for the API (optional, uses Anthropic default if empty).
-            model: Model name (e.g., "claude-sonnet-4-20250514").
+            model: Model name (e.g., "claude-sonnet-4-20250514" for Anthropic,
+                   "eu.anthropic.claude-sonnet-4-20250514-v1:0" for Bedrock).
             reasoning_effort: Reasoning effort level (not used by Anthropic).
             timeout: Request timeout in seconds.
+            bedrock_aws_region: AWS region for Bedrock (e.g., "eu-central-1").
+            bedrock_aws_profile: AWS profile name for Bedrock credentials (optional).
             **kwargs: Additional provider-specific parameters.
         """
         super().__init__(provider, api_key, base_url, model, reasoning_effort, **kwargs)
 
-        if not self.api_key:
-            raise ValueError("API key is required for Anthropic provider")
+        self._is_bedrock = self.provider == "bedrock"
 
-        # Import and initialize Anthropic client
         try:
-            from anthropic import AsyncAnthropic
+            if self._is_bedrock:
+                try:
+                    from anthropic import AsyncAnthropicBedrock
+                except ImportError as e:
+                    raise RuntimeError(
+                        "boto3 is required for Bedrock provider. "
+                        "Install it with: pip install 'hindsight-api-slim[bedrock]' or pip install boto3"
+                    ) from e
 
-            client_kwargs: dict[str, Any] = {"api_key": self.api_key}
-            if self.base_url:
-                client_kwargs["base_url"] = self.base_url
-            if timeout:
-                client_kwargs["timeout"] = timeout
+                client_kwargs: dict[str, Any] = {}
+                if bedrock_aws_region:
+                    client_kwargs["aws_region"] = bedrock_aws_region
+                if bedrock_aws_profile:
+                    client_kwargs["aws_profile"] = bedrock_aws_profile
+                if timeout:
+                    client_kwargs["timeout"] = timeout
 
-            self._client = AsyncAnthropic(**client_kwargs)
-            logger.info(f"Anthropic client initialized for model: {self.model}")
+                self._client = AsyncAnthropicBedrock(**client_kwargs)
+                logger.info(
+                    f"Anthropic Bedrock client initialized for model: {self.model} "
+                    f"(region: {bedrock_aws_region or 'default'}, profile: {bedrock_aws_profile or 'default'})"
+                )
+            else:
+                from anthropic import AsyncAnthropic
+
+                if not self.api_key:
+                    raise ValueError("API key is required for Anthropic provider")
+
+                client_kwargs: dict[str, Any] = {"api_key": self.api_key}
+                if self.base_url:
+                    client_kwargs["base_url"] = self.base_url
+                if timeout:
+                    client_kwargs["timeout"] = timeout
+
+                self._client = AsyncAnthropic(**client_kwargs)
+                logger.info(f"Anthropic client initialized for model: {self.model}")
         except ImportError as e:
             raise RuntimeError("Anthropic SDK not installed. Run: uv add anthropic or pip install anthropic") from e
 

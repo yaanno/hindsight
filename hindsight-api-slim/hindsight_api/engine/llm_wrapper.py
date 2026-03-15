@@ -126,6 +126,7 @@ _PROVIDERS_WITHOUT_API_KEY = frozenset(
         "claude-code",
         "mock",
         "vertexai",
+        "bedrock",
     }
 )
 
@@ -147,12 +148,14 @@ def create_llm_provider(
     vertexai_region: str | None = None,
     vertexai_credentials: Any = None,
     gemini_safety_settings: list | None = None,
+    bedrock_aws_region: str | None = None,
+    bedrock_aws_profile: str | None = None,
 ) -> Any:  # Returns LLMInterface
     """
     Factory function to create the appropriate LLM provider implementation.
 
     Args:
-        provider: Provider name ("openai", "groq", "ollama", "gemini", "anthropic", etc.).
+        provider: Provider name ("openai", "groq", "ollama", "gemini", "anthropic", "bedrock", etc.).
         api_key: API key (may be None for local providers or OAuth providers).
         base_url: Base URL for the API.
         model: Model name.
@@ -162,6 +165,8 @@ def create_llm_provider(
         vertexai_project_id: Vertex AI project ID (for VertexAI provider).
         vertexai_region: Vertex AI region (for VertexAI provider).
         vertexai_credentials: Vertex AI credentials object (for VertexAI provider).
+        bedrock_aws_region: AWS region for Bedrock (e.g., "eu-central-1").
+        bedrock_aws_profile: AWS profile name for Bedrock credentials (optional).
 
     Returns:
         LLMInterface implementation for the specified provider.
@@ -218,13 +223,15 @@ def create_llm_provider(
             gemini_safety_settings=gemini_safety_settings,
         )
 
-    elif provider_lower == "anthropic":
+    elif provider_lower in ("anthropic", "bedrock"):
         return AnthropicLLM(
             provider=provider,
             api_key=api_key,
             base_url=base_url,
             model=model,
             reasoning_effort=reasoning_effort,
+            bedrock_aws_region=bedrock_aws_region,
+            bedrock_aws_profile=bedrock_aws_profile,
         )
 
     elif provider_lower in ("openai", "groq", "ollama", "lmstudio", "minimax"):
@@ -291,6 +298,7 @@ class LLMProvider:
             "ollama",
             "gemini",
             "anthropic",
+            "bedrock",
             "lmstudio",
             "vertexai",
             "openai-codex",
@@ -354,6 +362,22 @@ class LLMProvider:
                 f"model={self.model}, auth={'service_account' if service_account_key else 'ADC'}"
             )
 
+        # Prepare Bedrock config (if applicable)
+        bedrock_aws_region = None
+        bedrock_aws_profile = None
+
+        if self.provider == "bedrock":
+            from ..config import get_config
+
+            config = get_config()
+
+            bedrock_aws_region = config.llm_bedrock_aws_region
+            bedrock_aws_profile = config.llm_bedrock_aws_profile
+
+            logger.info(
+                f"Bedrock: region={bedrock_aws_region}, profile={bedrock_aws_profile or 'default'}, model={self.model}"
+            )
+
         # For Gemini/VertexAI providers: read safety settings from global config if not explicitly provided
         # Use _get_raw_config() to bypass StaticConfigProxy (which blocks configurable fields),
         # since LLMProvider initialization legitimately needs the server-level default.
@@ -379,6 +403,8 @@ class LLMProvider:
             vertexai_region=vertexai_region,
             vertexai_credentials=vertexai_credentials,
             gemini_safety_settings=self.gemini_safety_settings,
+            bedrock_aws_region=bedrock_aws_region,
+            bedrock_aws_profile=bedrock_aws_profile,
         )
 
         # Backward compatibility: Keep mock provider properties
@@ -675,8 +701,9 @@ class LLMProvider:
         api_key = os.getenv("HINDSIGHT_API_LLM_API_KEY", "")
 
         # API key not needed for openai-codex (uses OAuth), claude-code (uses Keychain OAuth),
-        # ollama (local), or vertexai (uses GCP service account credentials)
-        if not api_key and provider not in ("openai-codex", "claude-code", "ollama", "vertexai"):
+        # ollama (local), vertexai (uses GCP service account credentials),
+        # or bedrock (uses AWS credential chain)
+        if not api_key and provider not in ("openai-codex", "claude-code", "ollama", "vertexai", "bedrock"):
             raise ValueError(
                 "HINDSIGHT_API_LLM_API_KEY environment variable is required (unless using openai-codex or claude-code)"
             )
@@ -693,8 +720,9 @@ class LLMProvider:
         api_key = os.getenv("HINDSIGHT_API_ANSWER_LLM_API_KEY", os.getenv("HINDSIGHT_API_LLM_API_KEY", ""))
 
         # API key not needed for openai-codex (uses OAuth), claude-code (uses Keychain OAuth),
-        # ollama (local), or vertexai (uses GCP service account credentials)
-        if not api_key and provider not in ("openai-codex", "claude-code", "ollama", "vertexai"):
+        # ollama (local), vertexai (uses GCP service account credentials),
+        # or bedrock (uses AWS credential chain)
+        if not api_key and provider not in ("openai-codex", "claude-code", "ollama", "vertexai", "bedrock"):
             raise ValueError(
                 "HINDSIGHT_API_LLM_API_KEY or HINDSIGHT_API_ANSWER_LLM_API_KEY environment variable is required "
                 "(unless using openai-codex or claude-code)"
@@ -712,8 +740,9 @@ class LLMProvider:
         api_key = os.getenv("HINDSIGHT_API_JUDGE_LLM_API_KEY", os.getenv("HINDSIGHT_API_LLM_API_KEY", ""))
 
         # API key not needed for openai-codex (uses OAuth), claude-code (uses Keychain OAuth),
-        # ollama (local), or vertexai (uses GCP service account credentials)
-        if not api_key and provider not in ("openai-codex", "claude-code", "ollama", "vertexai"):
+        # ollama (local), vertexai (uses GCP service account credentials),
+        # or bedrock (uses AWS credential chain)
+        if not api_key and provider not in ("openai-codex", "claude-code", "ollama", "vertexai", "bedrock"):
             raise ValueError(
                 "HINDSIGHT_API_LLM_API_KEY or HINDSIGHT_API_JUDGE_LLM_API_KEY environment variable is required "
                 "(unless using openai-codex or claude-code)"

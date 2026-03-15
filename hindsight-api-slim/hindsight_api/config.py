@@ -254,6 +254,10 @@ ENV_LLM_VERTEXAI_PROJECT_ID = "HINDSIGHT_API_LLM_VERTEXAI_PROJECT_ID"
 ENV_LLM_VERTEXAI_REGION = "HINDSIGHT_API_LLM_VERTEXAI_REGION"
 ENV_LLM_VERTEXAI_SERVICE_ACCOUNT_KEY = "HINDSIGHT_API_LLM_VERTEXAI_SERVICE_ACCOUNT_KEY"
 
+# AWS Bedrock configuration
+ENV_LLM_BEDROCK_AWS_REGION = "HINDSIGHT_API_LLM_BEDROCK_AWS_REGION"
+ENV_LLM_BEDROCK_AWS_PROFILE = "HINDSIGHT_API_LLM_BEDROCK_AWS_PROFILE"
+
 # Gemini safety settings
 ENV_LLM_GEMINI_SAFETY_SETTINGS = "HINDSIGHT_API_LLM_GEMINI_SAFETY_SETTINGS"
 
@@ -371,6 +375,9 @@ DEFAULT_LLM_TIMEOUT = 120.0  # seconds
 DEFAULT_LLM_VERTEXAI_PROJECT_ID = None  # Required for Vertex AI
 DEFAULT_LLM_VERTEXAI_REGION = "us-central1"
 DEFAULT_LLM_VERTEXAI_SERVICE_ACCOUNT_KEY = None  # Optional, uses ADC if not set
+
+DEFAULT_LLM_BEDROCK_AWS_REGION = "us-east-1"
+DEFAULT_LLM_BEDROCK_AWS_PROFILE = None  # Optional, uses default credential chain if not set
 
 # Gemini safety settings defaults
 DEFAULT_LLM_GEMINI_SAFETY_SETTINGS = None  # None = use Gemini default safety settings
@@ -610,6 +617,10 @@ class HindsightConfig:
     llm_vertexai_project_id: str | None
     llm_vertexai_region: str
     llm_vertexai_service_account_key: str | None
+
+    # AWS Bedrock configuration
+    llm_bedrock_aws_region: str
+    llm_bedrock_aws_profile: str | None
 
     # Gemini safety settings (None = use Gemini defaults; list of dicts with category/threshold)
     llm_gemini_safety_settings: list | None
@@ -977,6 +988,9 @@ class HindsightConfig:
             llm_vertexai_region=os.getenv(ENV_LLM_VERTEXAI_REGION, DEFAULT_LLM_VERTEXAI_REGION),
             llm_vertexai_service_account_key=os.getenv(ENV_LLM_VERTEXAI_SERVICE_ACCOUNT_KEY)
             or DEFAULT_LLM_VERTEXAI_SERVICE_ACCOUNT_KEY,
+            # AWS Bedrock
+            llm_bedrock_aws_region=os.getenv(ENV_LLM_BEDROCK_AWS_REGION, DEFAULT_LLM_BEDROCK_AWS_REGION),
+            llm_bedrock_aws_profile=os.getenv(ENV_LLM_BEDROCK_AWS_PROFILE) or DEFAULT_LLM_BEDROCK_AWS_PROFILE,
             # Gemini safety settings (JSON-encoded list of {category, threshold} dicts)
             llm_gemini_safety_settings=json.loads(os.getenv(ENV_LLM_GEMINI_SAFETY_SETTINGS, "null")),
             # Per-operation LLM config (None = use default)

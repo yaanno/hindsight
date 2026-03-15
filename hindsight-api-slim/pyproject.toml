@@ -59,6 +59,9 @@ dependencies = [
 ]
 
 [project.optional-dependencies]
+bedrock = [
+    "boto3>=1.35.0",
+]
 local-ml = [
     # Local ML models for embeddings/reranking
     "sentence-transformers>=3.3.0",
@@ -75,7 +78,7 @@ embedded-db = [
     "pg0-embedded>=0.11.0",
 ]
 all = [
-    "hindsight-api-slim[local-ml,embedded-db]",
+    "hindsight-api-slim[local-ml,embedded-db,bedrock]",
 ]
 test = [
     "pytest>=7.0.0",
